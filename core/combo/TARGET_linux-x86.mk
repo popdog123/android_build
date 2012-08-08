@@ -17,19 +17,6 @@
 # Configuration for Linux on x86 as a target.
 # Included by combo/select.mk
 
-ifeq ($(TARGET_SIMULATOR),true)
-# When building for the simulator, use the HOST settings as TARGET settings
-TARGET_CC := $(HOST_CC)
-TARGET_CXX := $(HOST_CXX)
-TARGET_AR := $(HOST_AR)
-TARGET_GLOBAL_CFLAGS := $(HOST_GLOBAL_CFLAGS) -m32
-TARGET_GLOBAL_LDFLAGS := $(HOST_GLOBAL_LDFLAGS) -m32 -lpthread
-TARGET_NO_UNDEFINED_LDFLAGS := $(HOST_NO_UNDEFINED_LDFLAGS)
-ifeq ($(strip $(TARGET_ARCH_VARIANT)),)
-TARGET_ARCH_VARIANT := x86
-endif
-else #simulator
-
 # Provide a default variant.
 ifeq ($(strip $(TARGET_ARCH_VARIANT)),)
 TARGET_ARCH_VARIANT := x86
@@ -47,7 +34,13 @@ TARGET_AR := $(TARGET_TOOLS_PREFIX)ar$(HOST_EXECUTABLE_SUFFIX)
 TARGET_OBJCOPY := $(TARGET_TOOLS_PREFIX)objcopy$(HOST_EXECUTABLE_SUFFIX)
 TARGET_LD := $(TARGET_TOOLS_PREFIX)ld$(HOST_EXECUTABLE_SUFFIX)
 TARGET_STRIP := $(TARGET_TOOLS_PREFIX)strip$(HOST_EXECUTABLE_SUFFIX)
+
+ifeq ($(TARGET_BUILD_VARIANT),user)
 TARGET_STRIP_COMMAND = $(TARGET_STRIP) --strip-debug $< -o $@
+else
+TARGET_STRIP_COMMAND = $(TARGET_STRIP) --strip-debug $< -o $@ && \
+	$(TARGET_OBJCOPY) --add-gnu-debuglink=$< $@
+endif
 
 ifneq ($(wildcard $(TARGET_CC)),)
 TARGET_LIBGCC := \
@@ -91,15 +84,13 @@ TARGET_GLOBAL_CFLAGS += \
 			-funwind-tables \
 			-include $(call select-android-config-h,target_linux-x86)
 
-TARGET_GLOBAL_CFLAGS += -fstack-protector
+# Needs to be fixed later
+#TARGET_GLOBAL_CFLAGS += \
+#			-fstack-protector
 
 # Needs to be added for RELEASE
 #TARGET_GLOBAL_CFLAGS += \
 #			-DNDEBUG
-
-
-# Fix this after ssp.c is fixed for x86
-# TARGET_GLOBAL_CFLAGS += -fstack-protector
 
 TARGET_GLOBAL_CPPFLAGS += \
 			-fno-use-cxa-atexit
@@ -130,7 +121,6 @@ TARGET_CRTBEGIN_STATIC_O := $(TARGET_OUT_STATIC_LIBRARIES)/crtbegin_static.o
 TARGET_CRTBEGIN_DYNAMIC_O := $(TARGET_OUT_STATIC_LIBRARIES)/crtbegin_dynamic.o
 TARGET_CRTEND_O := $(TARGET_OUT_STATIC_LIBRARIES)/crtend_android.o
 
-
 TARGET_CRTBEGIN_SO_O := $(TARGET_OUT_STATIC_LIBRARIES)/crtbegin_so.o
 TARGET_CRTEND_SO_O := $(TARGET_OUT_STATIC_LIBRARIES)/crtend_so.o
 
@@ -140,28 +130,30 @@ TARGET_DEFAULT_SYSTEM_SHARED_LIBRARIES := libc libstdc++ libm
 
 TARGET_CUSTOM_LD_COMMAND := true
 define transform-o-to-shared-lib-inner
-$(TARGET_CXX) \
+$(hide) $(PRIVATE_CXX) \
 	$(PRIVATE_TARGET_GLOBAL_LDFLAGS) \
 	 -nostdlib -Wl,-soname,$(notdir $@) \
 	 -shared -Bsymbolic \
 	$(TARGET_GLOBAL_CFLAGS) \
 	$(PRIVATE_TARGET_GLOBAL_LD_DIRS) \
-	$(PRIVATE_TARGET_CRTBEGIN_SO_O) \
+	$(if $(filter true,$(PRIVATE_NO_CRT)),,$(PRIVATE_TARGET_CRTBEGIN_SO_O)) \
 	$(PRIVATE_ALL_OBJECTS) \
 	-Wl,--whole-archive \
-	$(call normalize-host-libraries,$(PRIVATE_ALL_WHOLE_STATIC_LIBRARIES)) \
+	$(call normalize-target-libraries,$(PRIVATE_ALL_WHOLE_STATIC_LIBRARIES)) \
 	-Wl,--no-whole-archive \
+	$(if $(PRIVATE_GROUP_STATIC_LIBRARIES),-Wl$(comma)--start-group) \
 	$(call normalize-target-libraries,$(PRIVATE_ALL_STATIC_LIBRARIES)) \
+	$(if $(PRIVATE_GROUP_STATIC_LIBRARIES),-Wl$(comma)--end-group) \
 	$(call normalize-target-libraries,$(PRIVATE_ALL_SHARED_LIBRARIES)) \
 	-o $@ \
 	$(PRIVATE_LDFLAGS) \
 	$(PRIVATE_TARGET_LIBGCC) \
-	$(PRIVATE_TARGET_CRTEND_SO_O)
+	$(if $(filter true,$(PRIVATE_NO_CRT)),,$(PRIVATE_TARGET_CRTEND_SO_O))
 endef
 
 
 define transform-o-to-executable-inner
-$(TARGET_CXX) \
+$(hide) $(PRIVATE_CXX) \
 	$(TARGET_GLOBAL_LDFLAGS) \
 	-nostdlib -Bdynamic \
 	-Wl,-dynamic-linker,/system/bin/linker \
@@ -170,28 +162,28 @@ $(TARGET_CXX) \
 	$(TARGET_GLOBAL_LD_DIRS) \
 	-Wl,-rpath-link=$(TARGET_OUT_INTERMEDIATE_LIBRARIES) \
 	$(call normalize-target-libraries,$(PRIVATE_ALL_SHARED_LIBRARIES)) \
-	$(TARGET_CRTBEGIN_DYNAMIC_O) \
+	$(if $(filter true,$(PRIVATE_NO_CRT)),,$(TARGET_CRTBEGIN_DYNAMIC_O)) \
 	$(PRIVATE_ALL_OBJECTS) \
+	$(if $(PRIVATE_GROUP_STATIC_LIBRARIES),-Wl$(comma)--start-group) \
 	$(call normalize-target-libraries,$(PRIVATE_ALL_STATIC_LIBRARIES)) \
+	$(if $(PRIVATE_GROUP_STATIC_LIBRARIES),-Wl$(comma)--end-group) \
 	$(PRIVATE_LDFLAGS) \
 	$(TARGET_LIBGCC) \
-	$(TARGET_CRTEND_O)
+	$(if $(filter true,$(PRIVATE_NO_CRT)),,$(TARGET_CRTEND_O))
 endef
 
 define transform-o-to-static-executable-inner
-$(TARGET_CXX) \
+$(hide) $(PRIVATE_CXX) \
 	$(TARGET_GLOBAL_LDFLAGS) \
 	-nostdlib -Bstatic \
 	-o $@ \
 	$(TARGET_GLOBAL_LD_DIRS) \
-	$(TARGET_CRTBEGIN_STATIC_O) \
+	$(if $(filter true,$(PRIVATE_NO_CRT)),,$(TARGET_CRTBEGIN_STATIC_O)) \
 	$(PRIVATE_LDFLAGS) \
 	$(PRIVATE_ALL_OBJECTS) \
 	-Wl,--start-group \
 	$(call normalize-target-libraries,$(PRIVATE_ALL_STATIC_LIBRARIES)) \
 	$(TARGET_LIBGCC) \
 	-Wl,--end-group \
-	$(TARGET_CRTEND_O)
+	$(if $(filter true,$(PRIVATE_NO_CRT)),,$(TARGET_CRTEND_O))
 endef
-
-endif #simulator

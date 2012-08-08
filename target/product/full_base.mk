@@ -15,15 +15,34 @@
 #
 
 # This is a build configuration for a full-featured build of the
-# Open-Source part of the tree. This is a base configuration to
-# bes used for AOSP builds on various target devices.
+# Open-Source part of the tree. It's geared toward a US-centric
+# build of the emulator, but all those aspects can be overridden
+# in inherited configurations.
 
-$(call inherit-product, frameworks/base/data/sounds/AudioPackage5.mk)
+PRODUCT_PACKAGES := \
+    drmserver \
+    libdrmframework \
+    libdrmframework_jni \
+    libfwdlockengine \
+    OpenWnn \
+    PinyinIME \
+    libWnnEngDic \
+    libWnnJpnDic \
+    libwnndict \
+    VideoEditor \
+    WAPPushManager
+
+# Put en_GB first in the list, so make it default.
+PRODUCT_LOCALES := en_GB
+
+# Get some sounds
+$(call inherit-product-if-exists, frameworks/base/data/sounds/AllAudio.mk)
 
 # Get the TTS language packs
-$(call inherit-product-if-exists, external/svox/pico/lang/all_pico_languages.mk)
+#$(call inherit-product-if-exists, external/svox/pico/lang/all_pico_languages.mk)
 
-# Get the list of languages.
-$(call inherit-product, $(SRC_TARGET_DIR)/product/languages_full.mk)
+# Get a list of languages.
+$(call inherit-product, $(SRC_TARGET_DIR)/product/locales_full.mk)
 
-$(call inherit-product, $(SRC_TARGET_DIR)/product/generic.mk)
+# Get everything else from the parent package
+$(call inherit-product, $(SRC_TARGET_DIR)/product/generic_no_telephony.mk)

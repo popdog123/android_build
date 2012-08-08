@@ -69,7 +69,7 @@ endif
 # Only the tags mentioned in this test are expected to be set by module
 # makefiles. Anything else is either a typo or a source of unexpected
 # behaviors.
-ifneq ($(filter-out user debug eng tests optional samples,$(LOCAL_MODULE_TAGS)),)
+ifneq ($(filter-out user debug eng tests optional samples shell_ash shell_mksh,$(LOCAL_MODULE_TAGS)),)
 $(warning unusual tags $(LOCAL_MODULE_TAGS) on $(LOCAL_MODULE) at $(LOCAL_PATH))
 endif
 
@@ -106,11 +106,11 @@ endif
 # Add implicit tags.
 #
 # If the local directory or one of its parents contains a MODULE_LICENSE_GPL
-# file, tag the module as "gnu".  Search for "*_GNU*" so that we can also
+# file, tag the module as "gnu".  Search for "*_GPL*" and "*_MPL*" so that we can also
 # find files like MODULE_LICENSE_GPL_AND_AFL but exclude files like
 # MODULE_LICENSE_LGPL.
 #
-ifneq ($(call find-parent-file,$(LOCAL_PATH),MODULE_LICENSE*_GPL*),)
+ifneq ($(call find-parent-file,$(LOCAL_PATH),MODULE_LICENSE*_GPL* MODULE_LICENSE*_MPL*),)
   LOCAL_MODULE_TAGS += gnu
 endif
 
@@ -122,12 +122,16 @@ ifneq (,$(filter $(LOCAL_MODULE),$(CUSTOM_MODULES)))
   LOCAL_MODULE_TAGS := $(sort $(LOCAL_MODULE_TAGS) user)
 endif
 
-# The definition of should-install-to-system will be different depending
-# on which goal (e.g., sdk or just droid) is being built.
 ifdef LOCAL_IS_HOST_MODULE
-  use_data :=
+  partition_tag :=
 else
-  use_data := $(if $(call should-install-to-system,$(LOCAL_MODULE_TAGS)),,_DATA)
+ifeq (true,$(LOCAL_PROPRIETARY_MODULE))
+  partition_tag := _VENDOR
+else
+  # The definition of should-install-to-system will be different depending
+  # on which goal (e.g., sdk or just droid) is being built.
+  partition_tag := $(if $(call should-install-to-system,$(LOCAL_MODULE_TAGS)),,_DATA)
+endif
 endif
 
 LOCAL_MODULE_CLASS := $(strip $(LOCAL_MODULE_CLASS))
@@ -145,7 +149,7 @@ endif
 
 LOCAL_MODULE_PATH := $(strip $(LOCAL_MODULE_PATH))
 ifeq ($(LOCAL_MODULE_PATH),)
-  LOCAL_MODULE_PATH := $($(my_prefix)OUT$(use_data)_$(LOCAL_MODULE_CLASS))
+  LOCAL_MODULE_PATH := $($(my_prefix)OUT$(partition_tag)_$(LOCAL_MODULE_CLASS))
   ifeq ($(strip $(LOCAL_MODULE_PATH)),)
     $(error $(LOCAL_PATH): unhandled LOCAL_MODULE_CLASS "$(LOCAL_MODULE_CLASS)")
   endif
@@ -196,7 +200,7 @@ built_module_path :=
 
 LOCAL_UNINSTALLABLE_MODULE := $(strip $(LOCAL_UNINSTALLABLE_MODULE))
 ifneq (true,$(LOCAL_UNINSTALLABLE_MODULE))
-  LOCAL_INSTALLED_MODULE := $(LOCAL_MODULE_PATH)/$(LOCAL_MODULE_SUBDIR)$(LOCAL_INSTALLED_MODULE_STEM)
+  LOCAL_INSTALLED_MODULE := $(LOCAL_MODULE_PATH)/$(LOCAL_INSTALLED_MODULE_STEM)
 endif
 
 # Assemble the list of targets to create PRIVATE_ variables for.
@@ -214,6 +218,9 @@ ifneq ($(strip $(aidl_sources)),)
 aidl_java_sources := $(patsubst %.aidl,%.java,$(addprefix $(intermediates.COMMON)/src/, $(aidl_sources)))
 aidl_sources := $(addprefix $(TOP_DIR)$(LOCAL_PATH)/, $(aidl_sources))
 
+ifeq (,$(TARGET_BUILD_APPS))
+LOCAL_AIDL_INCLUDES += $(FRAMEWORKS_BASE_JAVA_SRC_DIRS)
+endif
 aidl_preprocess_import :=
 LOCAL_SDK_VERSION:=$(strip $(LOCAL_SDK_VERSION))
 ifdef LOCAL_SDK_VERSION
@@ -225,7 +232,7 @@ endif # !current
 endif # LOCAL_SDK_VERSION
 $(aidl_java_sources): PRIVATE_AIDL_FLAGS := -b $(addprefix -p,$(aidl_preprocess_import)) -I$(LOCAL_PATH) -I$(LOCAL_PATH)/src $(addprefix -I,$(LOCAL_AIDL_INCLUDES))
 
-$(aidl_java_sources): $(intermediates.COMMON)/src/%.java: $(TOPDIR)$(LOCAL_PATH)/%.aidl $(PRIVATE_ADDITIONAL_DEPENDENCIES) $(AIDL) $(aidl_preprocess_import)
+$(aidl_java_sources): $(intermediates.COMMON)/src/%.java: $(TOPDIR)$(LOCAL_PATH)/%.aidl $(LOCAL_ADDITIONAL_DEPENDENCIES) $(AIDL) $(aidl_preprocess_import)
 	$(transform-aidl-to-java)
 -include $(aidl_java_sources:%.java=%.P)
 
@@ -259,6 +266,44 @@ else
 logtags_java_sources :=
 event_log_tags :=
 endif
+
+###########################################################
+## .proto files: Compile proto files to .java
+###########################################################
+proto_sources := $(filter %.proto,$(LOCAL_SRC_FILES))
+# Because names of the .java files compiled from .proto files are unknown until the
+# .proto files are compiled, we use a timestamp file as depedency.
+proto_java_sources_file_stamp :=
+ifneq ($(proto_sources),)
+proto_sources_fullpath := $(addprefix $(TOP_DIR)$(LOCAL_PATH)/, $(proto_sources))
+# By putting the generated java files into $(LOCAL_INTERMEDIATE_SOURCE_DIR), they will be
+# automatically found by the java compiling function transform-java-to-classes.jar.
+ifneq ($(LOCAL_INTERMEDIATE_SOURCE_DIR),)
+proto_java_intemediate_dir := $(LOCAL_INTERMEDIATE_SOURCE_DIR)/proto
+else
+# LOCAL_INTERMEDIATE_SOURCE_DIR may be not defined in non-java modules.
+proto_java_intemediate_dir := $(intermediates)/proto
+endif
+proto_java_sources_file_stamp := $(proto_java_intemediate_dir)/Proto.stamp
+proto_java_sources_dir := $(proto_java_intemediate_dir)/src
+
+$(proto_java_sources_file_stamp): PRIVATE_PROTO_INCLUDES := $(TOP)
+$(proto_java_sources_file_stamp): PRIVATE_PROTO_SRC_FILES := $(proto_sources_fullpath)
+$(proto_java_sources_file_stamp): PRIVATE_PROTO_JAVA_OUTPUT_DIR := $(proto_java_sources_dir)
+ifeq ($(LOCAL_PROTOC_OPTIMIZE_TYPE),micro)
+$(proto_java_sources_file_stamp): PRIVATE_PROTO_JAVA_OUTPUT_OPTION := --javamicro_out
+else
+$(proto_java_sources_file_stamp): PRIVATE_PROTO_JAVA_OUTPUT_OPTION := --java_out
+endif
+$(proto_java_sources_file_stamp): PRIVATE_PROTOC_FLAGS := $(LOCAL_PROTOC_FLAGS)
+$(proto_java_sources_file_stamp) : $(proto_sources_fullpath) $(PROTOC)
+	$(call transform-proto-to-java)
+
+#TODO: protoc should output the dependencies introduced by imports.
+
+LOCAL_INTERMEDIATE_TARGETS += $(proto_java_sources_file_stamp)
+endif # proto_sources
+
 
 ###########################################################
 ## Java: Compile .java files to .class
@@ -321,10 +366,11 @@ ifdef java_resource_file_groups
 	) \
     )
   # The arguments to jar that will include these files in a jar file.
+  # Quote the file name to handle special characters (such as #) correctly.
   extra_jar_args := \
     $(foreach group,$(java_resource_file_groups), \
-	$(addprefix -C $(word 1,$(subst :,$(space),$(group))) , \
-	    $(wordlist 2,9999,$(subst :,$(space),$(group))) \
+	$(addprefix -C "$(word 1,$(subst :,$(space),$(group)))" , \
+	    $(foreach w, $(wordlist 2,9999,$(subst :,$(space),$(group))), "$(w)" ) \
 	) \
     )
   java_resource_file_groups :=
@@ -369,12 +415,14 @@ $(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_STATIC_JAVA_LIBRARIES := $(full_static_ja
 #                 to guarantee that the files in full_java_libs will
 #                 be up-to-date.
 ifdef LOCAL_IS_HOST_MODULE
-# TODO: make prebuilt java libraries use the same
-#       intermediates path pattern as target java libraries.
 ifeq ($(LOCAL_BUILD_HOST_DEX),true)
+$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_BOOTCLASSPATH := -bootclasspath $(call java-lib-files,core-hostdex,$(LOCAL_IS_HOST_MODULE))
+
 full_java_libs := $(call java-lib-files,$(LOCAL_JAVA_LIBRARIES),$(LOCAL_IS_HOST_MODULE))
 full_java_lib_deps := $(call java-lib-deps,$(LOCAL_JAVA_LIBRARIES),$(LOCAL_IS_HOST_MODULE))
 else
+$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_BOOTCLASSPATH :=
+
 full_java_libs := $(addprefix $(HOST_OUT_JAVA_LIBRARIES)/,$(addsuffix $(COMMON_JAVA_PACKAGE_SUFFIX),$(LOCAL_JAVA_LIBRARIES)))
 full_java_lib_deps := $(full_java_libs)
 endif # LOCAL_BUILD_HOST_DEX
@@ -405,8 +453,10 @@ ifdef LOCAL_INSTRUMENTATION_FOR
   full_java_lib_deps += $(link_instr_intermediates_dir.COMMON)/classes.jar
 endif
 
+jar_manifest_file :=
 ifneq ($(strip $(LOCAL_JAR_MANIFEST)),)
-$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_JAR_MANIFEST := $(LOCAL_PATH)/$(LOCAL_JAR_MANIFEST)
+jar_manifest_file := $(LOCAL_PATH)/$(LOCAL_JAR_MANIFEST)
+$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_JAR_MANIFEST := $(jar_manifest_file)
 else
 $(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_JAR_MANIFEST :=
 endif
@@ -471,21 +521,21 @@ ifndef LOCAL_UNINSTALLABLE_MODULE
 ifneq ($(LOCAL_ACP_UNAVAILABLE),true)
 $(LOCAL_INSTALLED_MODULE): $(LOCAL_BUILT_MODULE) | $(ACP)
 	@echo "Install: $@"
-	$(copy-file-to-target)
+	$(copy-file-to-new-target)
 else
 $(LOCAL_INSTALLED_MODULE): $(LOCAL_BUILT_MODULE)
 	@echo "Install: $@"
 	$(copy-file-to-target-with-cp)
 endif
 
-ifeq ($(LOCAL_DEX_PREOPT),true)
+ifdef LOCAL_DEX_PREOPT
 installed_odex := $(basename $(LOCAL_INSTALLED_MODULE)).odex
 built_odex := $(basename $(LOCAL_BUILT_MODULE)).odex
 $(installed_odex) : $(built_odex) | $(ACP)
 	@echo "Install: $@"
 	$(copy-file-to-target)
 
-$(LOCAL_INSTALLED_MODULE) : | $(installed_odex)
+$(LOCAL_INSTALLED_MODULE) : $(installed_odex)
 endif
 
 endif # !LOCAL_UNINSTALLABLE_MODULE

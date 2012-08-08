@@ -59,14 +59,16 @@ HOST_GLOBAL_ARFLAGS := cqs
 HOST_CUSTOM_LD_COMMAND := true
 
 define transform-host-o-to-shared-lib-inner
-    $(HOST_CXX) \
+$(hide) $(PRIVATE_CXX) \
         -dynamiclib -single_module -read_only_relocs suppress \
         $(HOST_GLOBAL_LD_DIRS) \
         $(HOST_GLOBAL_LDFLAGS) \
         $(PRIVATE_ALL_OBJECTS) \
-        $(call normalize-target-libraries,$(PRIVATE_ALL_SHARED_LIBRARIES)) \
-        $(call normalize-target-libraries,$(PRIVATE_ALL_WHOLE_STATIC_LIBRARIES)) \
-        $(call normalize-target-libraries,$(PRIVATE_ALL_STATIC_LIBRARIES)) \
+        $(call normalize-host-libraries,$(PRIVATE_ALL_SHARED_LIBRARIES)) \
+        $(call normalize-host-libraries,$(PRIVATE_ALL_WHOLE_STATIC_LIBRARIES)) \
+        $(if $(PRIVATE_GROUP_STATIC_LIBRARIES),-Wl$(comma)--start-group) \
+        $(call normalize-host-libraries,$(PRIVATE_ALL_STATIC_LIBRARIES)) \
+        $(if $(PRIVATE_GROUP_STATIC_LIBRARIES),-Wl$(comma)--end-group) \
         $(PRIVATE_LDLIBS) \
         -o $@ \
         $(PRIVATE_LDFLAGS) \
@@ -74,15 +76,17 @@ define transform-host-o-to-shared-lib-inner
 endef
 
 define transform-host-o-to-executable-inner
-$(HOST_CXX) \
+$(hide) $(PRIVATE_CXX) \
         -o $@ \
         -Wl,-dynamic -headerpad_max_install_names \
         $(HOST_GLOBAL_LD_DIRS) \
         $(HOST_GLOBAL_LDFLAGS) \
-        $(call normalize-target-libraries,$(PRIVATE_ALL_SHARED_LIBRARIES)) \
+        $(call normalize-host-libraries,$(PRIVATE_ALL_SHARED_LIBRARIES)) \
         $(PRIVATE_ALL_OBJECTS) \
-        $(call normalize-target-libraries,$(PRIVATE_ALL_WHOLE_STATIC_LIBRARIES)) \
-        $(call normalize-target-libraries,$(PRIVATE_ALL_STATIC_LIBRARIES)) \
+        $(call normalize-host-libraries,$(PRIVATE_ALL_WHOLE_STATIC_LIBRARIES)) \
+        $(if $(PRIVATE_GROUP_STATIC_LIBRARIES),-Wl$(comma)--start-group) \
+        $(call normalize-host-libraries,$(PRIVATE_ALL_STATIC_LIBRARIES)) \
+        $(if $(PRIVATE_GROUP_STATIC_LIBRARIES),-Wl$(comma)--end-group) \
         $(PRIVATE_LDFLAGS) \
         $(PRIVATE_LDLIBS) \
         $(HOST_LIBGCC)

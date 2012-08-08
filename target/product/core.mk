@@ -19,63 +19,86 @@ PRODUCT_DEVICE := generic
 PRODUCT_NAME := core
 
 PRODUCT_PACKAGES := \
+    ApplicationsProvider \
+    BackupRestoreConfirmation \
+    Browser \
+    Contacts \
+    ContactsProvider \
+    DefaultContainerService \
+    DownloadProvider \
+    DownloadProviderUi \
+    HTMLViewer \
+    Home \
+    KeyChain \
+    MediaProvider \
+    PackageInstaller \
+    SettingsProvider \
+    SharedStorageBackup \
+    TelephonyProvider \
+    UserDictionaryProvider \
+    VpnDialogs \
+    apache-xml \
     bouncycastle \
+    bu \
+    cacerts \
     com.android.location.provider \
     com.android.location.provider.xml \
     core \
     core-junit \
-    create_test_dmtrace \
     dalvikvm \
     dexdeps \
     dexdump \
     dexlist \
     dexopt \
     dmtracedump \
-    dvz \
     dx \
     ext \
+    filterfw \
     framework-res \
     hprof-conv \
     icu.dat \
-    jasmin \
-    jasmin.jar \
+    installd \
+    ip \
+    ip-up-vpn \
+    ip6tables \
+    iptables \
+    libOpenMAXAL \
+    libOpenSLES \
+    libaudiopreprocessing \
     libcrypto \
-    libdex \
     libdvm \
     libexpat \
+    libfilterfw \
+    libfilterpack_imageproc \
+    libgabi++ \
     libicui18n \
     libicuuc \
-    libjavacore \
     libnativehelper \
     libnfc_ndef \
+    libpowermanager \
+    libspeexresampler \
     libsqlite_jni \
     libssl \
+    libstagefright_soft_h264dec \
+    libstagefright_soft_aacdec \
+    libstagefright_soft_amrdec \
+    libstagefright_soft_g711dec \
+    libstagefright_soft_mp3dec \
+    libstagefright_soft_mpeg4dec \
+    libstagefright_soft_vorbisdec \
+    libstagefright_soft_vpxdec \
+    libvariablespeed \
+    libwebrtc_audio_preprocessing \
+    libwilhelm \
     libz \
-    sqlite-jdbc \
-    Browser \
-    Contacts \
-    Home \
-    HTMLViewer \
-    Phone \
-    ApplicationsProvider \
-    ContactsProvider \
-    DownloadProvider \
-    DownloadProviderUi \
-    MediaProvider \
-    PicoTts \
-    SettingsProvider \
-    TelephonyProvider \
-    TtsService \
-    VpnServices \
-    UserDictionaryProvider \
-    PackageInstaller \
-    DefaultContainerService \
-    Bugreport
+    screencap \
+    sensorservice
 
 # host-only dependencies
 ifeq ($(WITH_HOST_DALVIK),true)
     PRODUCT_PACKAGES += \
+        apache-xml-hostdex \
         bouncycastle-hostdex \
         core-hostdex \
-        libjavacore-host
+        dalvik
 endif

@@ -44,24 +44,32 @@ include $(TARGET_ARCH_SPECIFIC_MAKEFILE)
 # You can set TARGET_TOOLS_PREFIX to get gcc from somewhere else
 ifeq ($(strip $(TARGET_TOOLS_PREFIX)),)
 TARGET_TOOLS_PREFIX := \
-	prebuilt/$(HOST_PREBUILT_TAG)/toolchain/arm-eabi-4.4.3/bin/arm-eabi-
+	prebuilt/$(HOST_PREBUILT_TAG)/toolchain/arm-linux-androideabi-4.4.x/bin/arm-linux-androideabi-
 endif
 
-TARGET_CC := $(TARGET_TOOLS_PREFIX)gcc$(HOST_EXECUTABLE_SUFFIX)
-TARGET_CXX := $(TARGET_TOOLS_PREFIX)g++$(HOST_EXECUTABLE_SUFFIX)
-TARGET_AR := $(TARGET_TOOLS_PREFIX)ar$(HOST_EXECUTABLE_SUFFIX)
-TARGET_OBJCOPY := $(TARGET_TOOLS_PREFIX)objcopy$(HOST_EXECUTABLE_SUFFIX)
-TARGET_LD := $(TARGET_TOOLS_PREFIX)ld$(HOST_EXECUTABLE_SUFFIX)
-TARGET_STRIP := $(HOST_OUT_EXECUTABLES)/soslim$(HOST_EXECUTABLE_SUFFIX)
-TARGET_STRIP_COMMAND = $(TARGET_STRIP) --strip --shady --quiet $< --outfile $@
+# Only define these if there's actually a gcc in there.
+# The gcc toolchain does not exists for windows/cygwin. In this case, do not reference it.
+ifneq ($(wildcard $(TARGET_TOOLS_PREFIX)gcc$(HOST_EXECUTABLE_SUFFIX)),)
+    TARGET_CC := $(TARGET_TOOLS_PREFIX)gcc$(HOST_EXECUTABLE_SUFFIX)
+    TARGET_CXX := $(TARGET_TOOLS_PREFIX)g++$(HOST_EXECUTABLE_SUFFIX)
+    TARGET_AR := $(TARGET_TOOLS_PREFIX)ar$(HOST_EXECUTABLE_SUFFIX)
+    TARGET_OBJCOPY := $(TARGET_TOOLS_PREFIX)objcopy$(HOST_EXECUTABLE_SUFFIX)
+    TARGET_LD := $(TARGET_TOOLS_PREFIX)ld$(HOST_EXECUTABLE_SUFFIX)
+    TARGET_STRIP := $(TARGET_TOOLS_PREFIX)strip$(HOST_EXECUTABLE_SUFFIX)
+    ifeq ($(TARGET_BUILD_VARIANT),user)
+        TARGET_STRIP_COMMAND = $(TARGET_STRIP) --strip-all $< -o $@
+    else
+        TARGET_STRIP_COMMAND = $(TARGET_STRIP) --strip-all $< -o $@ && \
+	    $(TARGET_OBJCOPY) --add-gnu-debuglink=$< $@
+    endif
+endif
 
 TARGET_NO_UNDEFINED_LDFLAGS := -Wl,--no-undefined
 
 TARGET_arm_CFLAGS :=    -O2 \
                         -fomit-frame-pointer \
                         -fstrict-aliasing    \
-                        -funswitch-loops     \
-                        -finline-limit=300
+                        -funswitch-loops
 
 # Modules can choose to compile some source as thumb. As
 # non-thumb enabled targets are supported, this is treated
@@ -71,8 +79,7 @@ ifeq ($(ARCH_ARM_HAVE_THUMB_SUPPORT),true)
 TARGET_thumb_CFLAGS :=  -mthumb \
                         -Os \
                         -fomit-frame-pointer \
-                        -fno-strict-aliasing \
-                        -finline-limit=64
+                        -fno-strict-aliasing
 else
 TARGET_thumb_CFLAGS := $(TARGET_arm_CFLAGS)
 endif
@@ -97,6 +104,7 @@ arch_include_dir := $(dir $(android_config_h))
 TARGET_GLOBAL_CFLAGS += \
 			-msoft-float -fpic \
 			-ffunction-sections \
+			-fdata-sections \
 			-funwind-tables \
 			-fstack-protector \
 			-Wa,--noexecstack \
@@ -105,6 +113,13 @@ TARGET_GLOBAL_CFLAGS += \
 			$(arch_variant_cflags) \
 			-include $(android_config_h) \
 			-I $(arch_include_dir)
+
+# This warning causes dalvik not to build with gcc 4.6 and -Werror.
+# We cannot turn it off blindly since the option is not available
+# in gcc-4.4.x
+ifneq ($(filter 4.6.0%, $(shell $(TARGET_CC) --version)),)
+TARGET_GLOBAL_CFLAGS += -Wno-unused-but-set-variable
+endif
 
 # This is to avoid the dreaded warning compiler message:
 #   note: the mangling of 'va_list' has changed in GCC 4.4
@@ -118,6 +133,7 @@ TARGET_GLOBAL_CFLAGS += -Wno-psabi
 
 TARGET_GLOBAL_LDFLAGS += \
 			-Wl,-z,noexecstack \
+			-Wl,--icf=safe \
 			$(arch_variant_ldflags)
 
 # We only need thumb interworking in cases where thumb support
@@ -132,12 +148,11 @@ endif
 
 TARGET_GLOBAL_CPPFLAGS += -fvisibility-inlines-hidden
 
+# More flags/options can be added here
 TARGET_RELEASE_CFLAGS := \
 			-DNDEBUG \
 			-g \
 			-Wstrict-aliasing=2 \
-			-finline-functions \
-			-fno-inline-functions-called-once \
 			-fgcse-after-reload \
 			-frerun-cse-after-loop \
 			-frename-registers
@@ -206,7 +221,7 @@ TARGET_C_INCLUDES := \
 	$(libstdc++_root)/include \
 	$(KERNEL_HEADERS) \
 	$(libm_root)/include \
-	$(libm_root)/include/arch/arm \
+	$(libm_root)/include/arm \
 	$(libthread_db_root)/include
 
 TARGET_CRTBEGIN_STATIC_O := $(TARGET_OUT_STATIC_LIBRARIES)/crtbegin_static.o
@@ -228,28 +243,30 @@ ifeq ($(strip $(WITH_JIT)),)
 endif
 
 define transform-o-to-shared-lib-inner
-$(TARGET_CXX) \
+$(hide) $(PRIVATE_CXX) \
 	-nostdlib -Wl,-soname,$(notdir $@) -Wl,-T,$(BUILD_SYSTEM)/armelf.xsc \
 	-Wl,--gc-sections \
 	-Wl,-shared,-Bsymbolic \
 	$(PRIVATE_TARGET_GLOBAL_LD_DIRS) \
 	$(PRIVATE_ALL_OBJECTS) \
-	$(PRIVATE_TARGET_CRTBEGIN_SO_O) \
+	$(if $(filter true,$(PRIVATE_NO_CRT)),,$(PRIVATE_TARGET_CRTBEGIN_SO_O)) \
 	-Wl,--whole-archive \
-	$(call normalize-host-libraries,$(PRIVATE_ALL_WHOLE_STATIC_LIBRARIES)) \
+	$(call normalize-target-libraries,$(PRIVATE_ALL_WHOLE_STATIC_LIBRARIES)) \
 	-Wl,--no-whole-archive \
+	$(if $(PRIVATE_GROUP_STATIC_LIBRARIES),-Wl$(comma)--start-group) \
 	$(call normalize-target-libraries,$(PRIVATE_ALL_STATIC_LIBRARIES)) \
+	$(if $(PRIVATE_GROUP_STATIC_LIBRARIES),-Wl$(comma)--end-group) \
 	$(call normalize-target-libraries,$(PRIVATE_ALL_SHARED_LIBRARIES)) \
 	-o $@ \
 	$(PRIVATE_TARGET_GLOBAL_LDFLAGS) \
 	$(PRIVATE_LDFLAGS) \
 	$(PRIVATE_TARGET_FDO_LIB) \
 	$(PRIVATE_TARGET_LIBGCC) \
-	$(PRIVATE_TARGET_CRTEND_SO_O)
+	$(if $(filter true,$(PRIVATE_NO_CRT)),,$(PRIVATE_TARGET_CRTEND_SO_O))
 endef
 
 define transform-o-to-executable-inner
-$(TARGET_CXX) -nostdlib -Bdynamic -Wl,-T,$(BUILD_SYSTEM)/armelf.x \
+$(hide) $(PRIVATE_CXX) -nostdlib -Bdynamic -Wl,-T,$(BUILD_SYSTEM)/armelf.x \
 	-Wl,-dynamic-linker,/system/bin/linker \
     -Wl,--gc-sections \
 	-Wl,-z,nocopyreloc \
@@ -257,27 +274,33 @@ $(TARGET_CXX) -nostdlib -Bdynamic -Wl,-T,$(BUILD_SYSTEM)/armelf.x \
 	$(TARGET_GLOBAL_LD_DIRS) \
 	-Wl,-rpath-link=$(TARGET_OUT_INTERMEDIATE_LIBRARIES) \
 	$(call normalize-target-libraries,$(PRIVATE_ALL_SHARED_LIBRARIES)) \
-	$(TARGET_CRTBEGIN_DYNAMIC_O) \
+	$(if $(filter true,$(PRIVATE_NO_CRT)),,$(TARGET_CRTBEGIN_DYNAMIC_O)) \
 	$(PRIVATE_ALL_OBJECTS) \
+	$(if $(PRIVATE_GROUP_STATIC_LIBRARIES),-Wl$(comma)--start-group) \
 	$(call normalize-target-libraries,$(PRIVATE_ALL_STATIC_LIBRARIES)) \
+	$(if $(PRIVATE_GROUP_STATIC_LIBRARIES),-Wl$(comma)--end-group) \
 	$(TARGET_GLOBAL_LDFLAGS) \
 	$(PRIVATE_LDFLAGS) \
 	$(TARGET_FDO_LIB) \
 	$(TARGET_LIBGCC) \
-	$(TARGET_CRTEND_O)
+	$(if $(filter true,$(PRIVATE_NO_CRT)),,$(TARGET_CRTEND_O))
 endef
 
 define transform-o-to-static-executable-inner
-$(TARGET_CXX) -nostdlib -Bstatic -Wl,-T,$(BUILD_SYSTEM)/armelf.x \
+$(hide) $(PRIVATE_CXX) -nostdlib -Bstatic -Wl,-T,$(BUILD_SYSTEM)/armelf.x \
     -Wl,--gc-sections \
 	-o $@ \
 	$(TARGET_GLOBAL_LD_DIRS) \
-	$(TARGET_CRTBEGIN_STATIC_O) \
+	$(if $(filter true,$(PRIVATE_NO_CRT)),,$(TARGET_CRTBEGIN_STATIC_O)) \
 	$(TARGET_GLOBAL_LDFLAGS) \
 	$(PRIVATE_LDFLAGS) \
 	$(PRIVATE_ALL_OBJECTS) \
-	$(call normalize-target-libraries,$(PRIVATE_ALL_STATIC_LIBRARIES)) \
+	$(call normalize-target-libraries,$(filter-out %libc_nomalloc.a,$(filter-out %libc.a,$(PRIVATE_ALL_STATIC_LIBRARIES)))) \
+	-Wl,--start-group \
+	$(call normalize-target-libraries,$(filter %libc.a,$(PRIVATE_ALL_STATIC_LIBRARIES))) \
+	$(call normalize-target-libraries,$(filter %libc_nomalloc.a,$(PRIVATE_ALL_STATIC_LIBRARIES))) \
 	$(TARGET_FDO_LIB) \
 	$(TARGET_LIBGCC) \
-	$(TARGET_CRTEND_O)
+	-Wl,--end-group \
+	$(if $(filter true,$(PRIVATE_NO_CRT)),,$(TARGET_CRTEND_O))
 endef

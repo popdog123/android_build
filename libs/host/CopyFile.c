@@ -63,6 +63,23 @@ static bool isSourceNewer(const struct stat* pSrcStat, const struct stat* pDstSt
 }
 
 /*
+ * Returns true if the source file has high resolution modification
+ * date. Cygwin/Mingw doesn't support st_mtim and always returns false.
+ */
+static bool isHiresMtime(const struct stat* pSrcStat)
+{
+#if HAVE_STAT_ST_MTIM
+#if defined(MACOSX_RSRC)
+    return pSrcStat->st_mtimespec.tv_nsec > 0;
+#else
+    return pSrcStat->st_mtim.tv_nsec > 0;
+#endif
+#else
+    return 0;
+#endif
+}
+
+/*
  * Returns true if the source and destination files are actually the
  * same thing.  We detect this by checking the inode numbers, which seems
  * to work on Cygwin.
@@ -151,6 +168,8 @@ static int setPermissions(const char* dst, const struct stat* pSrcStat, unsigned
          */
         ut.actime = pSrcStat->st_atime;
         ut.modtime = pSrcStat->st_mtime;
+        if (isHiresMtime(pSrcStat))
+            ut.modtime += 1;
         if (utime(dst, &ut) != 0) {
             DBUG(("---   unable to set timestamps on '%s': %s\n",
                 dst, strerror(errno)));
