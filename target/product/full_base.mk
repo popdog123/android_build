@@ -29,7 +29,6 @@ PRODUCT_PACKAGES := \
     libWnnEngDic \
     libWnnJpnDic \
     libwnndict \
-    VideoEditor \
     WAPPushManager
 
 # Put en_GB first in the list, so make it default.
