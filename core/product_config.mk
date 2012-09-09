@@ -186,7 +186,7 @@ ifneq ($(strip $(TARGET_BUILD_APPS)),)
       $(SRC_TARGET_DIR)/product/AndroidProducts.mk))
 else
 ifneq ($(AOSP_BUILD),)
-  $(call import-products, device/*/$(OXYGEN_BUILD)/aosp.mk)
+  $(call import-products, device/*/$(AOSP_BUILD)/aosp.mk)
 else
   # Read in all of the product definitions specified by the AndroidProducts.mk
   # files in the tree.
