@@ -33,7 +33,6 @@ PRODUCT_PACKAGES := \
     LatinIME \
     Launcher2 \
     Music \
-    MusicFX \
     Provision \
     Phone \
     QuickSearchBox \
@@ -48,12 +47,7 @@ PRODUCT_PACKAGES += \
     icu.dat
 
 PRODUCT_PACKAGES += \
-    librs_jni \
-    libvideoeditor_jni \
-    libvideoeditor_core \
-    libvideoeditor_osal \
-    libvideoeditor_videofilters \
-    libvideoeditorplayer \
+    librs_jni
 
 PRODUCT_PACKAGES += \
     audio.primary.default \
@@ -78,6 +72,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
 $(call inherit-product-if-exists, frameworks/base/data/fonts/fonts.mk)
 $(call inherit-product-if-exists, external/cibu-fonts/fonts.mk)
 $(call inherit-product-if-exists, external/lohit-fonts/fonts.mk)
+$(call inherit-product-if-exists, external/naver-fonts/fonts.mk)
 $(call inherit-product-if-exists, frameworks/base/data/keyboards/keyboards.mk)
 $(call inherit-product, $(SRC_TARGET_DIR)/product/core.mk)
 
