@@ -21,15 +21,15 @@ PRODUCT_POLICY := android.policy_phone
 
 PRODUCT_PACKAGES := \
     DeskClock \
-    AlarmProvider \
     Bluetooth \
     Calculator \
     Calendar \
     CertInstaller \
     DrmProvider \
     Email \
-    Exchange \
+    Exchange2 \
     Gallery2 \
+    InputDevices \
     LatinIME \
     Launcher2 \
     Music \
@@ -38,11 +38,8 @@ PRODUCT_PACKAGES := \
     Phone \
     QuickSearchBox \
     Settings \
-    Sync \
     SystemUI \
-    Updater \
     CalendarProvider \
-    SyncProvider \
     bluetooth-health \
     hostapd \
     wpa_supplicant.conf
@@ -53,12 +50,19 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     librs_jni \
     libvideoeditor_jni \
+    libvideoeditor_core \
+    libvideoeditor_osal \
+    libvideoeditor_videofilters \
     libvideoeditorplayer \
-    libvideoeditor_core
 
 PRODUCT_PACKAGES += \
     audio.primary.default \
-    audio_policy.default
+    audio_policy.default \
+    local_time.default \
+    power.default
+
+PRODUCT_PACKAGES += \
+    local_time.default
 
 PRODUCT_COPY_FILES := \
         system/bluetooth/data/audio.conf:system/etc/bluetooth/audio.conf \
@@ -66,9 +70,13 @@ PRODUCT_COPY_FILES := \
         system/bluetooth/data/blacklist.conf:system/etc/bluetooth/blacklist.conf \
         system/bluetooth/data/input.conf:system/etc/bluetooth/input.conf \
         system/bluetooth/data/network.conf:system/etc/bluetooth/network.conf \
-        frameworks/base/media/libeffects/data/audio_effects.conf:system/etc/audio_effects.conf
+        frameworks/av/media/libeffects/data/audio_effects.conf:system/etc/audio_effects.conf
+
+PRODUCT_PROPERTY_OVERRIDES += \
+    ro.carrier=unknown
 
 $(call inherit-product-if-exists, frameworks/base/data/fonts/fonts.mk)
+$(call inherit-product-if-exists, external/cibu-fonts/fonts.mk)
 $(call inherit-product-if-exists, external/lohit-fonts/fonts.mk)
 $(call inherit-product-if-exists, frameworks/base/data/keyboards/keyboards.mk)
 $(call inherit-product, $(SRC_TARGET_DIR)/product/core.mk)

@@ -65,6 +65,12 @@ ifeq ($(strip $(LOCAL_MANIFEST_FILE)),)
 LOCAL_MANIFEST_FILE := AndroidManifest.xml
 endif
 
+# If you need to put the MANIFEST_FILE outside of LOCAL_PATH
+# you can use FULL_MANIFEST_FILE
+ifeq ($(strip $(LOCAL_FULL_MANIFEST_FILE)),)
+LOCAL_FULL_MANIFEST_FILE := $(LOCAL_PATH)/$(LOCAL_MANIFEST_FILE)
+endif
+
 ifneq ($(strip $(LOCAL_MODULE_CLASS)),)
 $(error $(LOCAL_PATH): Package modules may not set LOCAL_MODULE_CLASS)
 endif
@@ -88,12 +94,14 @@ endif
 ifeq (,$(LOCAL_RESOURCE_DIR))
   LOCAL_RESOURCE_DIR := $(LOCAL_PATH)/res
 endif
-LOCAL_RESOURCE_DIR := \
-  $(wildcard $(foreach dir, $(PRODUCT_PACKAGE_OVERLAYS), \
-    $(addprefix $(dir)/, $(LOCAL_RESOURCE_DIR)))) \
-  $(wildcard $(foreach dir, $(DEVICE_PACKAGE_OVERLAYS), \
-    $(addprefix $(dir)/, $(LOCAL_RESOURCE_DIR)))) \
-  $(LOCAL_RESOURCE_DIR)
+
+package_resource_overlays := $(strip \
+    $(wildcard $(foreach dir, $(PRODUCT_PACKAGE_OVERLAYS), \
+      $(addprefix $(dir)/, $(LOCAL_RESOURCE_DIR)))) \
+    $(wildcard $(foreach dir, $(DEVICE_PACKAGE_OVERLAYS), \
+      $(addprefix $(dir)/, $(LOCAL_RESOURCE_DIR)))))
+
+LOCAL_RESOURCE_DIR := $(package_resource_overlays) $(LOCAL_RESOURCE_DIR)
 
 all_assets := $(call find-subdir-assets,$(LOCAL_ASSET_DIR))
 all_assets := $(addprefix $(LOCAL_ASSET_DIR)/,$(patsubst assets/%,%,$(all_assets)))
@@ -171,7 +179,7 @@ ifeq ($(LOCAL_SDK_RES_VERSION),)
   LOCAL_SDK_RES_VERSION:=$(LOCAL_SDK_VERSION)
 endif
 
-full_android_manifest := $(LOCAL_PATH)/$(LOCAL_MANIFEST_FILE)
+full_android_manifest := $(LOCAL_FULL_MANIFEST_FILE)
 $(LOCAL_INTERMEDIATE_TARGETS): \
     PRIVATE_ANDROID_MANIFEST := $(full_android_manifest)
 ifneq (,$(filter-out current, $(LOCAL_SDK_VERSION)))
@@ -261,7 +269,7 @@ else
 # Most packages should link against the resources defined by framework-res.
 # Even if they don't have their own resources, they may use framework
 # resources.
-ifneq ($(filter-out current,$(LOCAL_SDK_RES_VERSION)),)
+ifneq ($(filter-out current,$(LOCAL_SDK_RES_VERSION))$(if $(TARGET_BUILD_APPS),$(filter current,$(LOCAL_SDK_RES_VERSION))),)
 # for released sdk versions, the platform resources were built into android.jar.
 framework_res_package_export := \
     $(HISTORICAL_SDK_VERSIONS_ROOT)/$(LOCAL_SDK_RES_VERSION)/android.jar
@@ -393,6 +401,9 @@ endif
 # Save information about this package
 PACKAGES.$(LOCAL_PACKAGE_NAME).OVERRIDES := $(strip $(LOCAL_OVERRIDES_PACKAGES))
 PACKAGES.$(LOCAL_PACKAGE_NAME).RESOURCE_FILES := $(all_resources)
+ifdef package_resource_overlays
+PACKAGES.$(LOCAL_PACKAGE_NAME).RESOURCE_OVERLAYS := $(package_resource_overlays)
+endif
 
 PACKAGES := $(PACKAGES) $(LOCAL_PACKAGE_NAME)
 

@@ -185,16 +185,16 @@ ifneq ($(strip $(TARGET_BUILD_APPS)),)
   $(call import-products,$(call get-product-makefiles,\
       $(SRC_TARGET_DIR)/product/AndroidProducts.mk))
 else
-  ifneq ($(OXYGEN_BUILD),)
-    $(call import-products, device/*/$(OXYGEN_BUILD)/oxygen.mk)
-  else
+ifneq ($(AOSP_BUILD),)
+  $(call import-products, device/*/$(OXYGEN_BUILD)/aosp.mk)
+else
   # Read in all of the product definitions specified by the AndroidProducts.mk
-    # files in the tree.
-    #
-    #TODO: when we start allowing direct pointers to product files,
-    #    guarantee that they're in this list.
-    $(call import-products, $(get-all-product-makefiles))
-  endif
+  # files in the tree.
+  #
+  #TODO: when we start allowing direct pointers to product files,
+  #    guarantee that they're in this list.
+  $(call import-products, $(get-all-product-makefiles))
+endif
 endif # TARGET_BUILD_APPS
 $(check-all-products)
 
@@ -301,9 +301,6 @@ PRODUCT_PROPERTY_OVERRIDES := \
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES := \
     $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_DEFAULT_PROPERTY_OVERRIDES))
 
-PRODUCT_BUILD_PROP_OVERRIDES := \
-	$(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_BUILD_PROP_OVERRIDES))
-
 # Should we use the default resources or add any product specific overlays
 PRODUCT_PACKAGE_OVERLAYS := \
     $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_PACKAGE_OVERLAYS))
@@ -312,6 +309,10 @@ DEVICE_PACKAGE_OVERLAYS := \
 
 # An list of whitespace-separated words.
 PRODUCT_TAGS := $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_TAGS))
+
+# The list of product-specific kernel header dirs
+PRODUCT_VENDOR_KERNEL_HEADERS := \
+    $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VENDOR_KERNEL_HEADERS)
 
 # Add the product-defined properties to the build properties.
 ADDITIONAL_BUILD_PROPERTIES := \

@@ -55,6 +55,7 @@ endif
 #space := $(empty) $(empty)
 #$(shell echo $(lastword $(filter-out config/% out/%,$(MAKEFILE_LIST))),$(LOCAL_MODULE),$(strip $(LOCAL_MODULE_CLASS)),$(subst $(space),$(comma),$(sort $(LOCAL_MODULE_TAGS))) >> tag-list.csv)
 
+LOCAL_UNINSTALLABLE_MODULE := $(strip $(LOCAL_UNINSTALLABLE_MODULE))
 LOCAL_MODULE_TAGS := $(sort $(LOCAL_MODULE_TAGS))
 ifeq (,$(LOCAL_MODULE_TAGS))
 ifeq (true,$(LOCAL_UNINSTALLABLE_MODULE))
@@ -110,8 +111,10 @@ endif
 # find files like MODULE_LICENSE_GPL_AND_AFL but exclude files like
 # MODULE_LICENSE_LGPL.
 #
-ifneq ($(call find-parent-file,$(LOCAL_PATH),MODULE_LICENSE*_GPL* MODULE_LICENSE*_MPL*),)
+gpl_license_file := $(call find-parent-file,$(LOCAL_PATH),MODULE_LICENSE*_GPL* MODULE_LICENSE*_MPL*)
+ifneq ($(gpl_license_file),)
   LOCAL_MODULE_TAGS += gnu
+  ALL_GPL_MODULE_LICENSE_FILES := $(sort $(ALL_GPL_MODULE_LICENSE_FILES) $(gpl_license_file))
 endif
 
 #
@@ -120,18 +123,6 @@ endif
 #
 ifneq (,$(filter $(LOCAL_MODULE),$(CUSTOM_MODULES)))
   LOCAL_MODULE_TAGS := $(sort $(LOCAL_MODULE_TAGS) user)
-endif
-
-ifdef LOCAL_IS_HOST_MODULE
-  partition_tag :=
-else
-ifeq (true,$(LOCAL_PROPRIETARY_MODULE))
-  partition_tag := _VENDOR
-else
-  # The definition of should-install-to-system will be different depending
-  # on which goal (e.g., sdk or just droid) is being built.
-  partition_tag := $(if $(call should-install-to-system,$(LOCAL_MODULE_TAGS)),,_DATA)
-endif
 endif
 
 LOCAL_MODULE_CLASS := $(strip $(LOCAL_MODULE_CLASS))
@@ -147,6 +138,19 @@ ifeq ($(LOCAL_MODULE_CLASS),APPS)
   endif
 endif
 
+ifneq (true,$(LOCAL_UNINSTALLABLE_MODULE))
+ifdef LOCAL_IS_HOST_MODULE
+  partition_tag :=
+else
+ifeq (true,$(LOCAL_PROPRIETARY_MODULE))
+  partition_tag := _VENDOR
+else
+  # The definition of should-install-to-system will be different depending
+  # on which goal (e.g., sdk or just droid) is being built.
+  partition_tag := $(if $(call should-install-to-system,$(LOCAL_MODULE_TAGS)),,_DATA)
+endif
+endif
+
 LOCAL_MODULE_PATH := $(strip $(LOCAL_MODULE_PATH))
 ifeq ($(LOCAL_MODULE_PATH),)
   LOCAL_MODULE_PATH := $($(my_prefix)OUT$(partition_tag)_$(LOCAL_MODULE_CLASS))
@@ -154,6 +158,7 @@ ifeq ($(LOCAL_MODULE_PATH),)
     $(error $(LOCAL_PATH): unhandled LOCAL_MODULE_CLASS "$(LOCAL_MODULE_CLASS)")
   endif
 endif
+endif # not LOCAL_UNINSTALLABLE_MODULE
 
 ifneq ($(strip $(LOCAL_BUILT_MODULE)$(LOCAL_INSTALLED_MODULE)),)
   $(error $(LOCAL_PATH): LOCAL_BUILT_MODULE and LOCAL_INSTALLED_MODULE must not be defined by component makefiles)
@@ -198,7 +203,6 @@ endif
 LOCAL_BUILT_MODULE := $(built_module_path)/$(LOCAL_BUILT_MODULE_STEM)
 built_module_path :=
 
-LOCAL_UNINSTALLABLE_MODULE := $(strip $(LOCAL_UNINSTALLABLE_MODULE))
 ifneq (true,$(LOCAL_UNINSTALLABLE_MODULE))
   LOCAL_INSTALLED_MODULE := $(LOCAL_MODULE_PATH)/$(LOCAL_INSTALLED_MODULE_STEM)
 endif
@@ -224,7 +228,8 @@ endif
 aidl_preprocess_import :=
 LOCAL_SDK_VERSION:=$(strip $(LOCAL_SDK_VERSION))
 ifdef LOCAL_SDK_VERSION
-ifeq ($(LOCAL_SDK_VERSION),current)
+ifeq ($(LOCAL_SDK_VERSION)$(TARGET_BUILD_APPS),current)
+  # LOCAL_SDK_VERSION is current and no TARGET_BUILD_APPS
   aidl_preprocess_import := $(TARGET_OUT_COMMON_INTERMEDIATES)/framework.aidl
 else
   aidl_preprocess_import := $(HISTORICAL_SDK_VERSIONS_ROOT)/$(LOCAL_SDK_VERSION)/framework.aidl
@@ -381,7 +386,7 @@ endif # java_resource_file_groups
 
 ## PRIVATE java vars ######################################
 
-ifneq ($(strip $(all_java_sources)$(all_res_assets)),)
+ifneq ($(strip $(all_java_sources)$(all_res_assets))$(LOCAL_STATIC_JAVA_LIBRARIES),)
 
 full_static_java_libs := \
     $(foreach lib,$(LOCAL_STATIC_JAVA_LIBRARIES), \
@@ -397,7 +402,8 @@ ifeq ($(my_prefix),TARGET_)
 ifeq ($(LOCAL_SDK_VERSION),)
 $(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_BOOTCLASSPATH := -bootclasspath $(call java-lib-files,core)
 else
-ifeq ($(LOCAL_SDK_VERSION),current)
+ifeq ($(LOCAL_SDK_VERSION)$(TARGET_BUILD_APPS),current)
+# LOCAL_SDK_VERSION is current and no TARGET_BUILD_APPS.
 $(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_BOOTCLASSPATH := -bootclasspath $(call java-lib-files,android_stubs_current)
 else
 $(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_BOOTCLASSPATH := -bootclasspath $(call java-lib-files,sdk_v$(LOCAL_SDK_VERSION))
@@ -587,6 +593,10 @@ ALL_MODULES.$(LOCAL_MODULE).EVENT_LOG_TAGS := \
     $(ALL_MODULES.$(LOCAL_MODULE).EVENT_LOG_TAGS) $(event_log_tags)
 ALL_MODULES.$(LOCAL_MODULE).INTERMEDIATE_SOURCE_DIR := \
     $(ALL_MODULES.$(LOCAL_MODULE).INTERMEDIATE_SOURCE_DIR) $(LOCAL_INTERMEDIATE_SOURCE_DIR)
+ifdef LOCAL_MODULE_OWNER
+ALL_MODULES.$(LOCAL_MODULE).OWNER := \
+    $(strip $(ALL_MODULES.$(LOCAL_MODULE).OWNER) $(LOCAL_MODULE_OWNER))
+endif
 
 INSTALLABLE_FILES.$(LOCAL_INSTALLED_MODULE).MODULE := $(LOCAL_MODULE)
 

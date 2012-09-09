@@ -60,7 +60,6 @@ endef
 #
 
 _product_var_list := \
-    PRODUCT_BUILD_PROP_OVERRIDES \
     PRODUCT_NAME \
     PRODUCT_MODEL \
     PRODUCT_LOCALES \
@@ -85,6 +84,9 @@ _product_var_list := \
     PRODUCT_SDK_ADDON_DOC_MODULES \
     PRODUCT_DEFAULT_WIFI_CHANNELS \
     PRODUCT_DEFAULT_DEV_CERTIFICATE \
+    PRODUCT_RESTRICT_VENDOR_FILES \
+    PRODUCT_FACTORY_RAMDISK_MODULES \
+    PRODUCT_VENDOR_KERNEL_HEADERS \
 
 
 define dump-product
@@ -200,6 +202,9 @@ _product_stash_var_list := $(_product_var_list) \
 	TARGET_ARCH_VARIANT \
 	TARGET_BOARD_PLATFORM \
 	TARGET_BOARD_PLATFORM_GPU \
+	TARGET_BOARD_KERNEL_HEADERS \
+	TARGET_DEVICE_KERNEL_HEADERS \
+	TARGET_PRODUCT_KERNEL_HEADERS \
 	TARGET_BOOTLOADER_BOARD_NAME \
 	TARGET_COMPRESS_MODULE_SYMBOLS \
 	TARGET_NO_BOOTLOADER \
@@ -228,6 +233,8 @@ _product_stash_var_list += \
 	BOARD_RECOVERYIMAGE_PARTITION_SIZE \
 	BOARD_SYSTEMIMAGE_PARTITION_SIZE \
 	BOARD_USERDATAIMAGE_PARTITION_SIZE \
+	BOARD_CACHEIMAGE_FILE_SYSTEM_TYPE \
+	BOARD_CACHEIMAGE_PARTITION_SIZE \
 	BOARD_FLASH_BLOCK_SIZE \
 	BOARD_SYSTEMIMAGE_PARTITION_SIZE \
 	BOARD_VENDOR_QCOM_GPS_LOC_API_HARDWARE \
@@ -264,4 +271,8 @@ $(strip \
   $(if $(changed_variables),\
     $(eval $(error The following variables have been changed: $(changed_variables))),)
 )
+endef
+
+define add-to-product-copy-files-if-exists
+$(if $(wildcard $(word 1,$(subst :, ,$(1)))),$(1))
 endef
