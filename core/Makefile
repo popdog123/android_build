@@ -1299,17 +1299,10 @@ $(INTERNAL_OTA_PACKAGE_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(DISTTOOLS) $(SEL
 	   --override_device=$(override_device) \
 	   $(BUILT_TARGET_FILES_PACKAGE) $@
 
-.PHONY: otapackage bacon
+.PHONY: otapackage aosp
 otapackage: $(INTERNAL_OTA_PACKAGE_TARGET)
-bacon: otapackage
-ifneq ($(TARGET_CUSTOM_RELEASETOOL),)
-	@echo "Running custom releasetool..."
-	$(hide) $(TARGET_CUSTOM_RELEASETOOL)
-else
-	@echo "Running releasetool..."
-	$(hide) ./vendor/cm/tools/squisher
-endif
-
+aosp: otapackage
+	$(hide) ./vendor/common/tools/squisher
 # -----------------------------------------------------------------
 # The update package
 
